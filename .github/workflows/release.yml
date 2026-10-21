@@ -41,7 +41,12 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          ./gradlew :app:assembleRelease --no-daemon -Pcreatorpulse.updateRepo="${GITHUB_REPOSITORY}"
+          # Maven Central occasionally answers 429 on busy runners; retry the build a few times.
+          for attempt in 1 2 3; do
+            if ./gradlew :app:assembleRelease --no-daemon --no-configuration-cache -Pcreatorpulse.updateRepo="${GITHUB_REPOSITORY}"; then break; fi
+            if [ "$attempt" = "3" ]; then exit 1; fi
+            echo "Build attempt $attempt failed, retrying in 60s..."; sleep 60
+          done
           TAG="${GITHUB_REF_NAME}"
           cp app/build/outputs/apk/release/app-release.apk "CreatorPulse-${TAG#v}.apk"
       - uses: softprops/action-gh-release@v2

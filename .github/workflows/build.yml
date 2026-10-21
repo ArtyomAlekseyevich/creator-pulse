@@ -18,7 +18,12 @@ jobs:
         with:
           packages: "platforms;android-36 build-tools;36.0.0 platform-tools"
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :app:assembleDebug --no-daemon
+      - run: |
+          for attempt in 1 2 3; do
+            if ./gradlew :app:assembleDebug --no-daemon --no-configuration-cache; then break; fi
+            if [ "$attempt" = "3" ]; then exit 1; fi
+            echo "Build attempt $attempt failed, retrying in 60s..."; sleep 60
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: CreatorPulse-debug
