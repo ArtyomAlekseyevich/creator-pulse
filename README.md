@@ -1,5 +1,7 @@
 # Creator Pulse
 
+Repository: https://github.com/ArtyomAlekseyevich/creator-pulse · Releases (APKs): https://github.com/ArtyomAlekseyevich/creator-pulse/releases
+
 An unofficial Android companion for the Roblox Creator Hub: live player counts, visits,
 Robux balance, sales and group revenue, Open Cloud analytics charts, and two home screen widgets.
 
