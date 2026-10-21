@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Creator Pulse</string>
+    <string name="widget_experience_label">Experience stats</string>
+    <string name="widget_experience_desc">Live players, visits, DAU and revenue for one experience</string>
+    <string name="widget_overview_label">Creator overview</string>
+    <string name="widget_overview_desc">Robux balance, players online and sales across your experiences</string>
+</resources>
