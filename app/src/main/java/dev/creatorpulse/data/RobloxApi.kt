@@ -83,6 +83,33 @@ class RobloxApi(private val secure: SecureStore) {
         @Suppress("UNREACHABLE_CODE") ""
     }
 
+    @Volatile private var csrfToken: String? = null
+
+    /** POST with Roblox's CSRF dance: a 403 carrying x-csrf-token means "retry with this token". */
+    private suspend fun postJson(url: String, body: String, requiresCookie: Boolean = true): String = withContext(Dispatchers.IO) {
+        if (requiresCookie && secure.cookie == null) throw AuthException()
+        var attempt = 0
+        while (true) {
+            webBucket.acquire()
+            val rb = Request.Builder().url(url).post(body.toRequestBody("application/json".toMediaType()))
+            csrfToken?.let { rb.header("x-csrf-token", it) }
+            val result = client.newCall(rb.build()).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                val newToken = resp.header("x-csrf-token")
+                when {
+                    resp.isSuccessful -> text
+                    resp.code == 403 && newToken != null && attempt == 0 -> { csrfToken = newToken; null }
+                    requiresCookie && resp.code == 401 -> { secure.markSessionExpired(); throw AuthException() }
+                    resp.code == 429 -> throw RateLimitedException(retryAfterMs(resp, 5_000L))
+                    else -> throw ApiException(resp.code, errorMessage(resp.code, text), url)
+                }
+            }
+            if (result != null) return@withContext result
+            attempt++
+        }
+        @Suppress("UNREACHABLE_CODE") ""
+    }
+
     private fun errorMessage(code: Int, body: String): String {
         val fromBody = runCatching {
             val obj = json.parseToJsonElement(body).jsonObject
@@ -229,6 +256,65 @@ class RobloxApi(private val secure: SecureStore) {
         return TransactionPage(items, page.nextPageCursor)
     }
 
+    // ---------- Ads Manager backend (cookie auth; what create.roblox.com/advertise calls) ----------
+
+    @Serializable private data class AdCampaignPage(val campaigns: List<AdCampaign> = emptyList(), val next_cursor: String? = null)
+    @Serializable private data class AdvertisedUniverses(val advertised_universes: List<AdvertisedUniverse> = emptyList())
+    @Serializable private data class AdvertisedUniverse(val universe_id: Long = 0, val universe_name: String = "")
+    @Serializable private data class AdCredit(val ad_credit_balance_in_micro: Double? = null, val is_account_activated: Boolean? = null)
+
+    private fun adsQuery(timePeriod: Int, groupId: Long?): String {
+        val ts = java.net.URLEncoder.encode(Instant.now().toString(), "UTF-8")
+        return "request_timestamp=$ts&time_period=$timePeriod&reporting_view=1" + (groupId?.let { "&groupId=$it" } ?: "")
+    }
+
+    /** All campaigns with performance for the period; the backend paginates with a cursor. */
+    suspend fun adCampaigns(timePeriod: Int, groupId: Long?): List<AdCampaign> {
+        val out = ArrayList<AdCampaign>()
+        var cursor: String? = null
+        var guard = 0
+        do {
+            val url = "$ADS_API/v3/native/campaigns/dateFilter?${adsQuery(timePeriod, groupId)}&include_performance=true&page_size=100" +
+                (cursor?.let { "&cursor=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: "")
+            val page = parse<AdCampaignPage>(get(url, requiresCookie = true))
+            out += page.campaigns
+            cursor = page.next_cursor
+        } while (!cursor.isNullOrEmpty() && ++guard < 20)
+        return out
+    }
+
+    suspend fun adAccountSummary(timePeriod: Int, groupId: Long?): AdAccountSummary =
+        parse(get("$ADS_API/v2/native/adAccountSummary/dateFilter?${adsQuery(timePeriod, groupId)}", requiresCookie = true))
+
+    suspend fun adCreditBalanceMicro(groupId: Long?): Double? =
+        parse<AdCredit>(get("$ADS_API/v1/adCreditBalance" + (groupId?.let { "?groupId=$it" } ?: ""), requiresCookie = true)).ad_credit_balance_in_micro
+
+    /** Display statuses (Active / Paused / Scheduled / Completed / In review…) as shown in the Ads Manager. */
+    suspend fun adCampaignDisplayStatuses(ids: List<String>, groupId: Long?): Map<String, Int> {
+        if (ids.isEmpty()) return emptyMap()
+        val url = "$ADS_API/v3/native/campaigns/status" + (groupId?.let { "?groupId=$it" } ?: "")
+        val body = """{"campaign_ids":[${ids.joinToString(",") { "\"$it\"" }}]}"""
+        val root = json.parseToJsonElement(postJson(url, body))
+        val out = HashMap<String, Int>()
+        fun scan(el: kotlinx.serialization.json.JsonElement) {
+            when (el) {
+                is kotlinx.serialization.json.JsonArray -> el.forEach(::scan)
+                is JsonObject -> {
+                    val id = el["id"]?.jsonPrimitive?.content ?: el["campaign_id"]?.jsonPrimitive?.content
+                    val st = (el["display_status"] ?: el["status"])?.jsonPrimitive?.content?.toIntOrNull()
+                    if (id != null && st != null) out[id] = st else el.values.forEach(::scan)
+                }
+                else -> {}
+            }
+        }
+        scan(root)
+        return out
+    }
+
+    suspend fun advertisedUniverses(groupId: Long?): Map<Long, String> =
+        parse<AdvertisedUniverses>(get("$ADS_API/v2/native/advertisedUniverses" + (groupId?.let { "?groupId=$it" } ?: ""), requiresCookie = true))
+            .advertised_universes.associate { it.universe_id to it.universe_name }
+
     // ---------- Open Cloud: Analytics Query API ----------
 
     @Serializable private data class AnalyticsOp(val path: String? = null, val done: Boolean = false, val response: AnalyticsResp? = null, val error: AnalyticsErr? = null)
@@ -300,6 +386,7 @@ class RobloxApi(private val secure: SecureStore) {
     }
 
     companion object {
+        const val ADS_API = "https://apis.roblox.com/ads-management-api"
         const val ANALYTICS_PER_MINUTE = 20
         const val WEB_PER_MINUTE = 90
         const val UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36 CreatorPulse/1.0"

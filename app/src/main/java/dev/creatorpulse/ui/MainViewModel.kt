@@ -4,7 +4,10 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.creatorpulse.App
+import dev.creatorpulse.data.AdsOverview
 import dev.creatorpulse.data.GroupInfo
+import dev.creatorpulse.data.ApiException
+import dev.creatorpulse.data.AuthException
 import dev.creatorpulse.data.NoApiKeyException
 import dev.creatorpulse.data.RevenueScope
 import dev.creatorpulse.data.Series
@@ -200,6 +203,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun reloadTransactions(scope: RevenueScope) {
         _tx.update { it - scopeKey(scope) }
         loadTransactions(scope)
+    }
+
+    // ---------- ads ----------
+
+    val ads: StateFlow<Map<String, AdsOverview>> = settings.adsOverviews.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+    private val _adsLoading = MutableStateFlow<Set<String>>(emptySet())
+    val adsLoading: StateFlow<Set<String>> = _adsLoading.asStateFlow()
+    private val _adsErrors = MutableStateFlow<Map<String, String>>(emptyMap())
+    val adsErrors: StateFlow<Map<String, String>> = _adsErrors.asStateFlow()
+
+    fun adsKey(scope: RevenueScope, timePeriod: Int) = "${scopeKey(scope)}|$timePeriod"
+
+    fun loadAds(scope: RevenueScope, timePeriod: Int, force: Boolean = false) {
+        val key = adsKey(scope, timePeriod)
+        if (key in _adsLoading.value) return
+        val cached = ads.value[key]
+        if (!force && cached != null && System.currentTimeMillis() - cached.fetchedAt < 5 * 60_000L) return
+        viewModelScope.launch {
+            _adsLoading.update { it + key }
+            try {
+                val o = repo.adsOverview(scope, timePeriod)
+                settings.saveAdsOverview(key, o)
+                _adsErrors.update { it - key }
+            } catch (e: Exception) {
+                val msg = when {
+                    e is AuthException -> "Sign in to see your ads"
+                    e is ApiException && (e.code == 403 || e.code == 404) -> "No ad account for this scope (HTTP ${e.code})"
+                    else -> e.message ?: "Could not load ads"
+                }
+                _adsErrors.update { it + (key to msg) }
+            } finally {
+                _adsLoading.update { it - key }
+            }
+        }
     }
 
     // ---------- updates ----------

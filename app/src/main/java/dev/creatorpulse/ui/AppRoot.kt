@@ -33,12 +33,13 @@ import dev.creatorpulse.ui.screens.ExperienceScreen
 import dev.creatorpulse.ui.screens.HomeScreen
 import dev.creatorpulse.ui.screens.LoginScreen
 import dev.creatorpulse.ui.screens.RevenueScreen
+import dev.creatorpulse.ui.screens.AdsScreen
 import dev.creatorpulse.ui.screens.SettingsScreen
 import dev.creatorpulse.ui.screens.WebScreen
 import dev.creatorpulse.ui.screens.WebSession
 import androidx.compose.ui.platform.LocalContext
 
-enum class Tab(val label: String) { Home("Experiences"), Revenue("Revenue"), Web("Ads & web"), Settings("Settings") }
+enum class Tab(val label: String) { Home("Experiences"), Revenue("Revenue"), Web("Ads"), Settings("Settings") }
 
 @Composable
 fun AppRoot(vm: MainViewModel, requestedUniverse: Long?, requestedTab: String?, onRequestConsumed: () -> Unit) {
@@ -46,6 +47,7 @@ fun AppRoot(vm: MainViewModel, requestedUniverse: Long?, requestedTab: String?, 
     var openUniverse by rememberSaveable { mutableStateOf<Long?>(null) }
     var login by rememberSaveable { mutableStateOf(false) }
     var webUrl by remember { mutableStateOf<String?>(null) }
+    var webOpen by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val web = remember { WebSession(context) }
     val cookie by vm.cookie.collectAsStateWithLifecycle()
@@ -59,9 +61,10 @@ fun AppRoot(vm: MainViewModel, requestedUniverse: Long?, requestedTab: String?, 
     }
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); vm.consumeMessage() } }
 
-    BackHandler(enabled = login || openUniverse != null || tab != Tab.Home) {
+    BackHandler(enabled = login || webOpen || openUniverse != null || tab != Tab.Home) {
         when {
             login -> login = false
+            webOpen -> webOpen = false
             openUniverse != null -> openUniverse = null
             else -> tab = Tab.Home
         }
@@ -69,6 +72,13 @@ fun AppRoot(vm: MainViewModel, requestedUniverse: Long?, requestedTab: String?, 
 
     if (login) {
         LoginScreen(onCookie = { vm.setCookie(it); login = false; tab = Tab.Home }, onClose = { login = false })
+        return
+    }
+    if (webOpen) {
+        WebScreen(
+            session = web, requestedUrl = webUrl, onRequestConsumed = { webUrl = null },
+            cookie = cookie, onCookieCaptured = { vm.setCookie(it) }, onClose = { webOpen = false },
+        )
         return
     }
 
@@ -105,14 +115,11 @@ fun AppRoot(vm: MainViewModel, requestedUniverse: Long?, requestedTab: String?, 
                         vm, universe,
                         onBack = { openUniverse = null },
                         onOpenSettings = { openUniverse = null; tab = Tab.Settings },
-                        onOpenWeb = { url -> webUrl = url; openUniverse = null; tab = Tab.Web },
+                        onOpenWeb = { url -> webUrl = url; webOpen = true },
                     )
                     currentTab == Tab.Home -> HomeScreen(vm, onOpen = { openUniverse = it }, onOpenSettings = { tab = Tab.Settings })
                     currentTab == Tab.Revenue -> RevenueScreen(vm, onOpenSettings = { tab = Tab.Settings }, onLogin = { login = true })
-                    currentTab == Tab.Web -> WebScreen(
-                        session = web, requestedUrl = webUrl, onRequestConsumed = { webUrl = null },
-                        cookie = cookie, onCookieCaptured = { vm.setCookie(it) },
-                    )
+                    currentTab == Tab.Web -> AdsScreen(vm, onOpenWeb = { url -> webUrl = url; webOpen = true }, onLogin = { login = true })
                     else -> SettingsScreen(vm, onLogin = { login = true })
                 }
             }

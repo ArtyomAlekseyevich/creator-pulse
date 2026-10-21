@@ -33,6 +33,7 @@ object Fmt {
     fun robux(n: Double): String = "R$ " + int(n)
     fun robuxCompact(n: Double): String = "R$ " + compact(n)
 
+    fun usd(v: Double): String = if (abs(v) >= 1000) "$" + compact(v) else String.format(Locale.US, "$%.2f", v)
     fun percent(v: Double, digits: Int = 1): String = String.format(Locale.US, "%.${digits}f%%", v)
 
     fun minutes(v: Double): String = if (v >= 60) String.format(Locale.US, "%.1fh", v / 60) else String.format(Locale.US, "%.1fm", v)

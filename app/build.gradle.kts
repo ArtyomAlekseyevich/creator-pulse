@@ -24,8 +24,8 @@ android {
         applicationId = "dev.creatorpulse"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
         vectorDrawables { useSupportLibrary = true }
         // GitHub repository the in-app updater checks (owner/name). Override with -Pcreatorpulse.updateRepo=...
         val updateRepo = (project.findProperty("creatorpulse.updateRepo") as String?) ?: "ArtyomAlekseyevich/creator-pulse"

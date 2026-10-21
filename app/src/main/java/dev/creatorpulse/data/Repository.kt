@@ -247,6 +247,24 @@ class Repository(
         )
     }
 
+    // ---------- ads (Ads Manager backend) ----------
+
+    suspend fun adsOverview(scope: RevenueScope, timePeriod: Int): AdsOverview {
+        val groupId = (scope as? RevenueScope.Group)?.id
+        val key = when (scope) { RevenueScope.User -> "user"; is RevenueScope.Group -> "group:${scope.id}" }
+        val campaigns = api.adCampaigns(timePeriod, groupId)
+        val summary = runCatching { api.adAccountSummary(timePeriod, groupId) }.getOrNull()
+        val credit = runCatching { api.adCreditBalanceMicro(groupId) }.getOrNull()
+        val names = runCatching { api.advertisedUniverses(groupId) }.getOrDefault(emptyMap())
+        val statuses = runCatching { api.adCampaignDisplayStatuses(campaigns.map { it.id }, groupId) }.getOrDefault(emptyMap())
+        val snapNames = settings.snapshotNow()?.experiences?.associate { it.universeId to it.name } ?: emptyMap()
+        return AdsOverview(
+            scopeKey = key, timePeriod = timePeriod, fetchedAt = System.currentTimeMillis(),
+            campaigns = campaigns.map { c -> statuses[c.id]?.let { c.copy(display_status = it) } ?: c },
+            summary = summary, adCreditMicro = credit, universeNames = snapNames + names,
+        )
+    }
+
     // ---------- revenue ----------
 
     suspend fun transactions(scope: RevenueScope, cursor: String?): RobloxApi.TransactionPage {

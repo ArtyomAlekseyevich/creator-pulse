@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
@@ -51,7 +52,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 data class WebLink(val label: String, val url: String, val desktop: Boolean = true)
 
 val WEB_LINKS = listOf(
-    WebLink("Ads Manager", "https://create.roblox.com/advertise/"),
+    WebLink("Ads Manager", "https://create.roblox.com/advertise/manage"),
     WebLink("Creator Hub", "https://create.roblox.com/dashboard/creations"),
     WebLink("Transactions", "https://www.roblox.com/transactions", desktop = false),
     WebLink("Group payouts", "https://create.roblox.com/dashboard/group", desktop = true),
@@ -144,7 +145,7 @@ class WebSession(private val context: Context) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WebScreen(session: WebSession, requestedUrl: String?, onRequestConsumed: () -> Unit, cookie: String?, onCookieCaptured: (String) -> Unit) {
+fun WebScreen(session: WebSession, requestedUrl: String?, onRequestConsumed: () -> Unit, cookie: String?, onCookieCaptured: (String) -> Unit, onClose: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(cookie) { session.seedCookie(cookie) }
     LaunchedEffect(Unit) {
@@ -160,6 +161,7 @@ fun WebScreen(session: WebSession, requestedUrl: String?, onRequestConsumed: () 
         topBar = {
             Column {
                 TopAppBar(
+                    navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Close") } },
                     title = {
                         Column {
                             Text(session.title.ifBlank { "Roblox" }, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)

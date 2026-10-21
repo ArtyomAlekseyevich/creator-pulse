@@ -42,11 +42,13 @@ Robux balance, sales and group revenue, Open Cloud analytics charts, and two hom
 - **Experiences tab** shows a 7-day ad revenue tile and per-experience "ads R$…" when it is non-zero.
 - **Revenue tab** shows *Ad payouts* (immersive / rewarded video revenue share) and *Ad spend*
   (Ads Manager / sponsoring) for the selected time frame.
-- **Ads & web tab** wraps the Roblox website with your session for everything that has no read API:
-  it opens **Ads Manager** (campaigns, sponsorships, reports) by default, with one-tap links to the
-  Creator Hub, Transactions and group payouts, plus back/forward/reload, a desktop/mobile site toggle
-  and "open in browser". Signing in there also signs the app in. The experience page's *Creator Hub*
-  button opens that experience's dashboard in the same tab.
+- **Ads tab** is a native view of the Roblox Ads Manager, built on the same backend calls the
+  create.roblox.com/advertise site makes with your session (`apis.roblox.com/ads-management-api`):
+  account totals (spend, plays, cost per play, impressions, clicks, CTR, attributed Robux revenue,
+  playtime, ad credit balance) and every campaign with status, objective, budget, schedule and
+  performance, for Today / Yesterday / 7 days / 30 days / This month / Last month / Year to date, per
+  user or group ad account. The website is still one tap away (top-right) in the built-in web view for
+  creating or editing campaigns.
 
 ## Data sources
 

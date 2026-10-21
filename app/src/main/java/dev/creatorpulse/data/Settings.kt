@@ -26,6 +26,9 @@ class Settings(private val context: Context) {
     val refreshMinutes: Flow<Int> = context.dataStore.data.map { it[REFRESH_MINUTES] ?: 30 }
     val showAdMetrics: Flow<Boolean> = context.dataStore.data.map { it[SHOW_ADS] == 1 }
     val updateCheckedAt: Flow<Long> = context.dataStore.data.map { it[UPDATE_CHECKED_AT] ?: 0L }
+    val adsOverviews: Flow<Map<String, AdsOverview>> = context.dataStore.data.map { p ->
+        p[ADS_OVERVIEWS]?.let { runCatching { json.decodeFromString<Map<String, AdsOverview>>(it) }.getOrNull() } ?: emptyMap()
+    }
     val snapshot: Flow<Snapshot?> = context.dataStore.data.map { p -> p[SNAPSHOT]?.let { decode(it) } }
     val lastError: Flow<String?> = context.dataStore.data.map { it[LAST_ERROR] }
     val keyForUniverse: Flow<Map<Long, String>> = context.dataStore.data.map { p ->
@@ -61,6 +64,10 @@ class Settings(private val context: Context) {
     suspend fun setRefreshMinutes(m: Int) = context.dataStore.edit { it[REFRESH_MINUTES] = m }
     suspend fun setShowAdMetrics(on: Boolean) = context.dataStore.edit { it[SHOW_ADS] = if (on) 1 else 0 }
     suspend fun setUpdateCheckedAt(t: Long) = context.dataStore.edit { it[UPDATE_CHECKED_AT] = t }
+    suspend fun saveAdsOverview(key: String, o: AdsOverview) = context.dataStore.edit { p ->
+        val cur = p[ADS_OVERVIEWS]?.let { runCatching { json.decodeFromString<Map<String, AdsOverview>>(it) }.getOrNull() } ?: emptyMap()
+        p[ADS_OVERVIEWS] = json.encodeToString(cur + (key to o))
+    }
 
     suspend fun rememberKeyForUniverse(universeId: Long, keyId: String) = context.dataStore.edit { p ->
         val cur = (p[KEY_FOR_UNIVERSE] ?: emptySet()).filterNot { it.startsWith("$universeId=") }.toMutableSet()
@@ -72,7 +79,7 @@ class Settings(private val context: Context) {
     }
 
     suspend fun clearAccountData() = context.dataStore.edit { p ->
-        p.remove(SNAPSHOT); p.remove(TRACKED_GROUPS); p.remove(GROUPS_INIT); p.remove(KNOWN_GROUPS); p.remove(LAST_ERROR)
+        p.remove(SNAPSHOT); p.remove(TRACKED_GROUPS); p.remove(GROUPS_INIT); p.remove(KNOWN_GROUPS); p.remove(LAST_ERROR); p.remove(ADS_OVERVIEWS)
     }
 
     private fun decode(s: String): Snapshot? = runCatching { json.decodeFromString(Snapshot.serializer(), s) }.getOrNull()
@@ -85,6 +92,7 @@ class Settings(private val context: Context) {
         private val REFRESH_MINUTES = intPreferencesKey("refresh_minutes")
         private val SHOW_ADS = intPreferencesKey("show_ad_metrics")
         private val UPDATE_CHECKED_AT = longPreferencesKey("update_checked_at")
+        private val ADS_OVERVIEWS = stringPreferencesKey("ads_overviews")
         private val SNAPSHOT = stringPreferencesKey("snapshot")
         private val LAST_ERROR = stringPreferencesKey("last_error")
         private val KEY_FOR_UNIVERSE = stringSetPreferencesKey("key_for_universe")
